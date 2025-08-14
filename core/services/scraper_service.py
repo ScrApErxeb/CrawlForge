@@ -8,3 +8,4 @@ class ScraperService:
         raw_data = self.scraper_strategy.fetch(url)
         parsed_data = self.parser.parse(raw_data)
         self.exporter.export(parsed_data)
+        
