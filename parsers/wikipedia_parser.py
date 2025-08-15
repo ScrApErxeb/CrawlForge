@@ -1,9 +1,12 @@
 from parsers.html_parser_base import HTMLParserBase
 from bs4 import BeautifulSoup
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 class WikipediaParser(HTMLParserBase):
     """Parser spécifique pour Wikipedia FR"""
+    def __init__(self, headings: List[str] = None):
+        self.headings_to_extract = headings or ["h1", "h2", "h3"]
+
     def parse(self, raw: str) -> Dict[str, Any]:
         soup = BeautifulSoup(raw, "html.parser")
         result = super().parse(raw)
@@ -22,7 +25,6 @@ class WikipediaParser(HTMLParserBase):
                     if text:
                         headings.append(text)
             return headings
-
 
         result["headings"]["h2"] = extract_wiki_headings("h2")
         result["headings"]["h3"] = extract_wiki_headings("h3")

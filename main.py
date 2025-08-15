@@ -1,38 +1,50 @@
 import argparse
-from datetime import datetime
+import asyncio
 from pathlib import Path
-from parsers.html_parser_base import HTMLParserBase
+from strategies.parallel_scraper import ParallelScraper
 from parsers.wikipedia_parser import WikipediaParser
 from exporters.multi_exporter import MultiExporter
-from strategies.parallel_scraper import ParallelScraper
+import logging
+from datetime import datetime
 
-def main():
-    parser = argparse.ArgumentParser(description="CrawlForge V1.2 - parallel scraping & cache")
-    parser.add_argument("urls", nargs="+", help="URLs à scraper")
-    parser.add_argument("--out", default="output/output", help="Préfixe pour CSV/JSON")
-    parser.add_argument("--wiki", action="store_true", help="Parser spécifique Wikipedia")
-    parser.add_argument("--selenium", action="store_true", help="Activer Selenium pour pages dynamiques")
-    parser.add_argument("--max", type=int, default=5, help="Nombre de scrapes simultanés")
-    args = parser.parse_args()
+# --- Logging ---
+logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger("CrawlForge")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    Path("output").mkdir(parents=True, exist_ok=True)
-    csv_path = f"{args.out}_{timestamp}.csv"
-    json_path = f"{args.out}_{timestamp}.json"
+# --- Arguments CLI ---
+parser = argparse.ArgumentParser(description="CrawlForge V1.3 - Parallel Web Scraper")
+parser.add_argument("urls", nargs="+", help="Liste des URLs à scraper")
+parser.add_argument("--out", default="output/", help="Répertoire de sortie")
+parser.add_argument("--max", type=int, default=5, help="Nombre max de tâches parallèles")
+parser.add_argument("--strategy", choices=["auto", "bs4", "selenium"], default="auto")
+parser.add_argument("--headings", default="h1,h2,h3", help="Balises à récupérer")
+args = parser.parse_args()
 
-    parser_cls = WikipediaParser if args.wiki else HTMLParserBase
-    exporter = MultiExporter(csv_path, json_path)
+# --- Préparation paths ---
+out_dir = Path(args.out)
+out_dir.mkdir(parents=True, exist_ok=True)
 
-    scraper = ParallelScraper(
-        urls=args.urls,
-        parser=parser_cls(),
-        exporter=exporter,
-        use_selenium=args.selenium,
-        max_concurrent=args.max
-    )
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+csv_path = out_dir / f"crawl_{timestamp}.csv"
+json_path = out_dir / f"crawl_{timestamp}.json"
 
-    import asyncio
-    asyncio.run(scraper.run_all())
+# --- Exporter ---
+exporter = MultiExporter(str(csv_path), str(json_path))
 
-if __name__ == "__main__":
-    main()
+# --- Parser ---
+parser_obj = WikipediaParser(headings=args.headings.split(","))
+
+# --- Scraper ---
+use_selenium = args.strategy in ["selenium", "auto"]
+scraper = ParallelScraper(
+    urls=args.urls,
+    parser=parser_obj,
+    exporter=exporter,
+    use_selenium=use_selenium,
+    max_concurrent=args.max,
+    cache_dir="cache/"
+)
+
+# --- Run ---
+asyncio.run(scraper.run_all())
+logger.info(f"Scraping terminé pour {len(args.urls)} URLs -> CSV: {csv_path} | JSON: {json_path}")
